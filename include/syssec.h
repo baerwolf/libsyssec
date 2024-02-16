@@ -20,8 +20,56 @@
 #	define SYSSECPUBLIC	extern
 #endif
 
+#include <linux/audit.h>
+#include <linux/bpf.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <linux/unistd.h>
+#include <sys/prctl.h>
+#include <unistd.h>
+
+#include <syscall.h>
+
+#define SYSCALLEOL          (-(__LONG_MAX__))
+#ifndef __NR_syscalls
+#   if 0
+#       define __NR_syscalls (sizeof(plattformsyscalls)/sizeof(struct syscall_info))
+#   else
+#    define __NR_syscalls (65536)
+#   endif
+#endif
+
+#define _h(y,x) (y|((y)>>(x)))
+#define getmask(x) (_h(_h(_h(_h(_h(x-1,1),2),4),8),16))
+
+#define SYSCALLCOUNT        ((2*(__NR_syscalls))+1)
+#define SYSCALLMASK         (getmask(SYSCALLCOUNT))
+
+#define SYSCALLEXTRABITS    ((__LONG_MAX__ / 8)+1)
+#define SYSCALL_ne          (SYSCALLEXTRABITS<<0)  /*not equal*/
+#define SYSCALL_geq         (SYSCALLEXTRABITS<<1)  /*greater or equal*/
+
+#if (SYSCALLMASK>(__LONG_MAX__ / 8))
+#error CAN NOT COMPILE ON ABI WITH TOO MANY SYSCALLS
+#endif
+
+#define assigned(x) (x!=NULL)
+
+struct syscall_info {
+    const char str[32];
+    const long nr;
+};
+
+
+
 SYSSECPUBLIC int syssec_initialize(void);
 SYSSECPUBLIC int syssec_finalize(void);
+
+SYSSECPUBLIC const int syssec_getBuildArch(void);
+
+SYSSECPUBLIC const char *syssec_syscallname(const long SYS_nr);
+SYSSECPUBLIC const long syssec_syscallnr(const char *SYS_name);
+
 
 
 #endif
