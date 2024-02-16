@@ -17,8 +17,7 @@ release/demo: build/demo.o $(STDDEP) $(EXTRADEP)
 build/demo.o: build/demo.S $(STDDEP) $(EXTRADEP)
 	$(CROSS_COMPILE)$(CC) build/demo.S -c -o build/demo.o $(MYCFLAGS)
 
-build/demo.S: source/demo.c $(STDDEP) $(EXTRADEP)
-	$(CROSS_COMPILE)$(CC) -dM -E  /usr/include/syscall.h -o /dev/stdout | sed 's/\t/\ \ /g' | grep "#define[\ ]*SYS_" | awk '{print $$2}' | while read line; do echo "{.str=\"$${line}\", .nr=$${line}},"; done > ./build/plattform.syscalls
+build/demo.S: source/demo.c build/plattform.syscalls $(STDDEP) $(EXTRADEP)
 	$(CROSS_COMPILE)$(CC) source/demo.c -S -o build/demo.S -I. $(MYCFLAGS)
 
 release/libsyssec.so: $(MYOBJECTS) $(STDDEP) $(EXTRADEP)
@@ -31,8 +30,11 @@ release/libsyssec.so: $(MYOBJECTS) $(STDDEP) $(EXTRADEP)
 build/syssec.o: build/syssec.S $(STDDEP) $(EXTRADEP)
 	$(CROSS_COMPILE)$(CC) build/syssec.S -c -o build/syssec.o $(MYCFLAGS)
 
-build/syssec.S: source/syssec.c $(STDDEP) $(EXTRADEP)
+build/syssec.S: source/syssec.c build/plattform.syscalls $(STDDEP) $(EXTRADEP)
 	$(CROSS_COMPILE)$(CC) source/syssec.c -S -o build/syssec.S -Iinclude -fPIC $(MYCFLAGS)
+
+build/plattform.syscalls:
+	$(CROSS_COMPILE)$(CC) -dM -E  /usr/include/syscall.h -o /dev/stdout | sed 's/\t/\ \ /g' | grep "#define[\ ]*SYS_" | awk '{print $$2}' | while read line; do echo "{.str=\"$${line}\", .nr=$${line}},"; done > ./build/plattform.syscalls
 
 clean:
 	$(RM) build/*
