@@ -65,10 +65,18 @@ struct syscall_info {
 SYSSECPUBLIC int syssec_initialize(void);
 SYSSECPUBLIC int syssec_finalize(void);
 
+SYSSECPUBLIC int syssec_install(void *bpfprog);
+
 SYSSECPUBLIC const int syssec_getBuildArch(void);
 
 SYSSECPUBLIC const char *syssec_syscallname(const long SYS_nr);
 SYSSECPUBLIC const long syssec_syscallnr(const char *SYS_name);
+
+SYSSECPUBLIC void *syssec_allocateprog(void);
+SYSSECPUBLIC void syssec_freeprog(void* bpfprog);
+
+SYSSECPUBLIC void syssec_freebpf(/*struct sock_fprog*/void *bpfprog);
+SYSSECPUBLIC int syssec_buildbpf(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn);
 
 
 

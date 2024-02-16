@@ -11,14 +11,14 @@ MYOBJECTS = build/syssec.o
 MYVERSION = 0.0.1
 all: release/demo release/libsyssec.so
 
-release/demo: build/demo.o $(STDDEP) $(EXTRADEP)
-	$(CROSS_COMPILE)$(CC) build/demo.o -o release/demo $(MYCFLAGS) -Wl,-Map,release/main.map $(MYLDFLAGS)
+release/demo: build/demo.o $(MYOBJECTS) $(STDDEP) $(EXTRADEP)
+	$(CROSS_COMPILE)$(CC) build/demo.o $(MYOBJECTS) -o release/demo $(MYCFLAGS) -Wl,-Map,release/main.map $(MYLDFLAGS)
 
 build/demo.o: build/demo.S $(STDDEP) $(EXTRADEP)
 	$(CROSS_COMPILE)$(CC) build/demo.S -c -o build/demo.o $(MYCFLAGS)
 
 build/demo.S: source/demo.c build/plattform.syscalls $(STDDEP) $(EXTRADEP)
-	$(CROSS_COMPILE)$(CC) source/demo.c -S -o build/demo.S -I. $(MYCFLAGS)
+	$(CROSS_COMPILE)$(CC) source/demo.c -S -o build/demo.S -I. -Iinclude $(MYCFLAGS)
 
 release/libsyssec.so: $(MYOBJECTS) $(STDDEP) $(EXTRADEP)
 	$(RM) release/libsyssec.so.0
