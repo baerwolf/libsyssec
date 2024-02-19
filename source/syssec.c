@@ -318,7 +318,7 @@ static int linkbpf(struct sock_fprog *prog, long *list, size_t len, int seccompr
 
         //succesful exit - accept syscall
         prog->filter[j+0]=bpfaccept;
-        //succesful exit - accept syscall
+        //rejective exit - deny syscall
         prog->filter[j+1]=bpfdeny;
         
 #if 1
