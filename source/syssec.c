@@ -570,3 +570,21 @@ int syssec_combinebpf(/*struct sock_fprog*/void *appended_to, /*struct sock_fpro
     }
     return result;
 }
+
+static int syssec_SECCOMP_helper(uint16_t returncode) {
+    int result = returncode;
+    result &= SECCOMP_RET_DATA;
+    return result;
+}
+
+int syssec_SECCOMP_RET_ERRNO(uint16_t returncode) {
+    return syssec_SECCOMP_helper(returncode) | SECCOMP_RET_ERRNO;
+}
+
+int syssec_SECCOMP_RET_TRAP(uint16_t returncode) {
+    return syssec_SECCOMP_helper(returncode) | SECCOMP_RET_TRAP;
+}
+
+int syssec_SECCOMP_RET_KILL_PROCESS(void) {
+    return SECCOMP_RET_KILL_PROCESS;
+}

@@ -20,6 +20,7 @@
 #	define SYSSECPUBLIC	extern
 #endif
 
+#include <stdint.h>
 #include <stdbool.h>
 
 #include <linux/audit.h>
@@ -86,5 +87,9 @@ SYSSECPUBLIC int bpf_add_opcode(void *bpfprog);
 
 SYSSECPUBLIC int syssec_combinebpf(/*struct sock_fprog*/void *appended_to, /*struct sock_fprog*/void *appended_from, bool skip_header);
 
+
+SYSSECPUBLIC int syssec_SECCOMP_RET_ERRNO(uint16_t returncode);
+SYSSECPUBLIC int syssec_SECCOMP_RET_TRAP(uint16_t returncode);
+SYSSECPUBLIC int syssec_SECCOMP_RET_KILL_PROCESS(void);
 
 #endif
