@@ -12,11 +12,15 @@
 #include "syssec.h"
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stddef.h>
 
 #include <string.h>
 #include <errno.h>
+
+#ifdef CONFIG_WITHCAPABILITIES
+//also needs linking with "-lcap"
+#   include <sys/capability.h>
+#endif
 
 static int __syssec_initialized = false;
 static struct syscall_info plattformsyscalls[] = {
@@ -215,9 +219,10 @@ static size_t SYSCALL_LIST_merge(long *list) {
 }
 
 #define BPFMAXLENGTH (256)
-static int bpf_add_opcode(struct sock_fprog *prog) {
+int bpf_add_opcode(void *bpfprog) {
     int result=-1;
     unsigned short i;
+    struct sock_fprog *prog = bpfprog;
 
     if assigned(prog) {
         if assigned(prog->filter) {
@@ -301,7 +306,8 @@ static int compilebpf(struct sock_fprog *prog, long *list, size_t lower, size_t 
     return EXIT_SUCCESS;
 }
 
-static int linkbpf(struct sock_fprog *prog, long *list, size_t len, int seccompreturn) {
+#define LINKBPF_FAILURE_LAST 0
+static int linkbpfEx(struct sock_fprog *prog, long *list, size_t len, int seccompreturn, bool rejectlast) {
     int result = EXIT_FAILURE;
     
     result = compilebpf(prog, list, 0, len-1);
@@ -316,36 +322,65 @@ static int linkbpf(struct sock_fprog *prog, long *list, size_t len, int seccompr
         k=bpf_add_opcode(prog);
         if (k<0) return EXIT_FAILURE;
 
+    if (rejectlast) {
         //succesful exit - accept syscall
         prog->filter[j+0]=bpfaccept;
         //rejective exit - deny syscall
         prog->filter[j+1]=bpfdeny;
+    } else {
+        //rejective exit - deny syscall
+        prog->filter[j+0]=bpfdeny;
+        //succesful exit - accept syscall
+        prog->filter[j+1]=bpfaccept;
+    }
         
-#if 1
         for (i=0;i<j;i++) {
-            if (BPF_CLASS(prog->filter[i].code)==BPF_JMP) {
-                if (BPF_OP(prog->filter[i].code)==BPF_JEQ) {
-                    if (BPF_CLASS(prog->filter[i].jt==0xff)) {
-                        prog->filter[i].jt=j-i;
+            if (rejectlast)  {
+                if (BPF_CLASS(prog->filter[i].code)==BPF_JMP) {
+                    if (BPF_OP(prog->filter[i].code)==BPF_JEQ) {
+                        if (BPF_CLASS(prog->filter[i].jt==0xff)) {
+                            prog->filter[i].jt=j-i;
+                            if (BPF_CLASS(prog->filter[i].jf==0xff)) {
+                                    prog->filter[i].jf=prog->filter[i].jt-1;
+                            }
+                        }
+                    } else {
                         if (BPF_CLASS(prog->filter[i].jf==0xff)) {
-                                prog->filter[i].jf=prog->filter[i].jt-1;
+                            prog->filter[i].jf=j-i;
+                            if (BPF_CLASS(prog->filter[i].jt==0xff)) {
+                                //end of interval - final decision
+                                prog->filter[i].jt=prog->filter[i].jf-1;
+                            } else {
+                                //start of interval
+                                prog->filter[i].jf--;
+                            }
                         }
                     }
-                } else {
-                    if (BPF_CLASS(prog->filter[i].jf==0xff)) {
-                        prog->filter[i].jf=j-i;
+                }
+            } else {
+                if (BPF_CLASS(prog->filter[i].code)==BPF_JMP) {
+                    if (BPF_OP(prog->filter[i].code)==BPF_JEQ) {
                         if (BPF_CLASS(prog->filter[i].jt==0xff)) {
-                            //end of interval - final decision
-                            prog->filter[i].jt=prog->filter[i].jf-1;
-                        } else {
-                            //start of interval
-                            prog->filter[i].jf--;
+                            prog->filter[i].jt=j-i-1;
+                            if (BPF_CLASS(prog->filter[i].jf==0xff)) {
+                                    prog->filter[i].jf=j-i;
+                            }
+                        }
+                    } else {
+                        if (BPF_CLASS(prog->filter[i].jf==0xff)) {
+                            prog->filter[i].jf=j-i-1;
+                            if (BPF_CLASS(prog->filter[i].jt==0xff)) {
+                                //end of interval - final decision
+                                prog->filter[i].jt=j-i;
+                            } else {
+                                //start of interval
+                                prog->filter[i].jf=j-i;
+                            }
                         }
                     }
                 }
             }
         }
-#endif
     }
     return result;
 }
@@ -356,7 +391,8 @@ void syssec_freebpf(/*struct sock_fprog*/void *bpfprog) {
     prog->filter=NULL; prog->len=0;
 }
 
-int syssec_buildbpf(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn) {
+#define SYSSEC_HEADER_OPS (5)
+int syssec_buildbpfEx(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn, bool rejectlast) {
     struct sock_fprog *prog=bpfprog;
     struct sock_filter header[] = {
         BPF_STMT(BPF_LD  | BPF_W   | BPF_ABS, (offsetof(struct seccomp_data, arch))),
@@ -377,11 +413,15 @@ int syssec_buildbpf(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supp
             if assigned(prog->filter) {
                 prog->len=sizeof(header)/sizeof(header[0]);
                 memcpy(prog->filter, header, sizeof(header));
-                result=linkbpf(prog, SYS_list, i, seccompreturn);
+                result=linkbpfEx(prog, SYS_list, i, seccompreturn, rejectlast);
             }
         }
     }
     return result;
+}
+
+int syssec_buildbpf(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn) {
+    return syssec_buildbpfEx(bpfprog, SYS_list, supported_arch, seccompreturn, true);
 }
 
 void *syssec_allocateprog(void) {
@@ -404,13 +444,100 @@ void syssec_freeprog(void* bpfprog) {
 int syssec_install(void *bpfprog) {
     int result=EXIT_FAILURE;
     if (assigned(bpfprog)) {
-        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)==0) { // we need to lock "new privs" in order to avoid error 13 (EPERM)
+        bool docontinue=false;
+
+#ifdef CONFIG_WITHCAPABILITIES
+        cap_value_t capvalue[1] = {CAP_SYS_ADMIN};
+        bool  clearcapability=false;
+        cap_t mycaps;
+
+        mycaps = cap_get_proc();
+        if (assigned(mycaps)) {
+            cap_flag_value_t flagvalue;
+
+            //check, if we have permissions
+            if (cap_get_flag(mycaps, capvalue[0], CAP_EFFECTIVE, &flagvalue) != (-1)) {
+                if (flagvalue == CAP_SET) {
+                    // we have effective CAP_SYS_ADMIN
+                    docontinue=true;
+                } else {
+                    //if we do not have effective capability, see if we are permitted in principle
+                    if (cap_get_flag(mycaps, capvalue[0],  CAP_PERMITTED, &flagvalue) != (-1)) {
+                        if (flagvalue == CAP_SET) {
+                            // yes, CAP_SYS_ADMIN+p...
+                            if (cap_set_flag(mycaps, CAP_EFFECTIVE, 1, capvalue, CAP_SET) != (-1)) {
+                                // ...try to set it effective...
+                                if (cap_set_proc(mycaps) != (-1)) {
+                                    //done
+                                    clearcapability=true;
+                                    docontinue=true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (!clearcapability) {
+                cap_free(mycaps);
+                mycaps=NULL;
+            }
+        }
+#endif
+        if (!docontinue) docontinue=(geteuid() == 0);
+
+        // we need to lock "new privs" in order to avoid error 13 (EPERM)
+        if (!docontinue) docontinue=(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)==0);
+        if (docontinue) {
             struct sock_fprog *prog=bpfprog;
             if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, prog)==0) {
                 result=EXIT_SUCCESS;
             }
         }
+
+#ifdef CONFIG_WITHCAPABILITIES
+        if (clearcapability) {
+            //we previously acquired effective capability...
+            //...release it after its use!
+            if (assigned(mycaps)) {
+                if (cap_set_flag(mycaps, CAP_EFFECTIVE, 1, capvalue, CAP_CLEAR) != (-1)) {
+                    //we do not care about the return - we couldn't do anything else
+                    cap_set_proc(mycaps);
+                }
+                cap_free(mycaps);
+                mycaps=NULL;
+            }
+        }
+#endif
+
     }
     return result;
 }
 
+int syssec_combinebpf(/*struct sock_fprog*/void *appended_to, /*struct sock_fprog*/void *appended_from, bool skip_header) {
+    int result=EXIT_FAILURE;
+    short int skip = (skip_header)?(SYSSEC_HEADER_OPS):(0);
+    if (assigned(appended_to)) {
+        if (assigned(appended_from)) {
+            struct sock_fprog *to   = appended_to;
+            struct sock_fprog *from = appended_from;
+            if (from->len <= skip) {
+                //nothing to append
+                result=EXIT_SUCCESS;
+            } else {
+                unsigned short len;
+                if (to->len == 0) bpf_add_opcode(to);
+                len=from->len;
+                if (to->len > 0) {
+                    unsigned short i=skip;
+                    to->filter[to->len-1]=from->filter[i++];
+                    for (;i<len;i++) {
+                        if (bpf_add_opcode(to) < 0) return EXIT_FAILURE;
+                        to->filter[to->len-1]=from->filter[i];
+                    }
+                    result=EXIT_SUCCESS;
+                }
+            }
+        }
+    }
+    return result;
+}

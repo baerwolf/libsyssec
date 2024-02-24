@@ -20,6 +20,8 @@
 #	define SYSSECPUBLIC	extern
 #endif
 
+#include <stdbool.h>
+
 #include <linux/audit.h>
 #include <linux/bpf.h>
 #include <linux/filter.h>
@@ -77,7 +79,11 @@ SYSSECPUBLIC void syssec_freeprog(void* bpfprog);
 
 SYSSECPUBLIC void syssec_freebpf(/*struct sock_fprog*/void *bpfprog);
 SYSSECPUBLIC int syssec_buildbpf(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn);
+SYSSECPUBLIC int syssec_buildbpfEx(/*struct sock_fprog*/void *bpfprog, long *SYS_list, int supported_arch, int seccompreturn, bool rejectlast);
+SYSSECPUBLIC int bpf_add_opcode(void *bpfprog);
 
+
+SYSSECPUBLIC int syssec_combinebpf(/*struct sock_fprog*/void *appended_to, /*struct sock_fprog*/void *appended_from, bool skip_header);
 
 
 #endif
