@@ -68,6 +68,7 @@ SYSSECPUBLIC int syssec_initialize(void);
 SYSSECPUBLIC int syssec_finalize(void);
 
 SYSSECPUBLIC int syssec_install(void *bpfprog);
+SYSSECPUBLIC int syssec_installEx(void *bpfprog, bool newprivs);
 
 SYSSECPUBLIC const int syssec_getBuildArch(void);
 

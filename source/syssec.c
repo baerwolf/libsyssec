@@ -442,51 +442,80 @@ void syssec_freeprog(void* bpfprog) {
 }
 
 int syssec_install(void *bpfprog) {
+    return syssec_installEx(bpfprog, false);
+}
+
+int syssec_installEx(void *bpfprog, bool newprivs) {
     int result=EXIT_FAILURE;
     if (assigned(bpfprog)) {
         bool docontinue=false;
 
 #ifdef CONFIG_WITHCAPABILITIES
+        /* manual PRCTL(2) says unter "SECCOMP_MODE_FILTER"-errors
+         *
+            EACCES option  is  PR_SET_SECCOMP  and  arg2  is  SECCOMP_MODE_FILTER,  but  the  process  does not have the
+            CAP_SYS_ADMIN  capability  or  has  not  set  the  no_new_privs  attribute  (see  the  discussion  of
+            PR_SET_NO_NEW_PRIVS above).
+         *
+         */
         cap_value_t capvalue[1] = {CAP_SYS_ADMIN};
         bool  clearcapability=false;
-        cap_t mycaps;
+        cap_t mycaps=NULL;
 
-        mycaps = cap_get_proc();
-        if (assigned(mycaps)) {
-            cap_flag_value_t flagvalue;
+        if (newprivs) {
+            mycaps = cap_get_proc();
+            if (assigned(mycaps)) {
+                cap_flag_value_t flagvalue;
 
-            //check, if we have permissions
-            if (cap_get_flag(mycaps, capvalue[0], CAP_EFFECTIVE, &flagvalue) != (-1)) {
-                if (flagvalue == CAP_SET) {
-                    // we have effective CAP_SYS_ADMIN
-                    docontinue=true;
-                } else {
-                    //if we do not have effective capability, see if we are permitted in principle
-                    if (cap_get_flag(mycaps, capvalue[0],  CAP_PERMITTED, &flagvalue) != (-1)) {
-                        if (flagvalue == CAP_SET) {
-                            // yes, CAP_SYS_ADMIN+p...
-                            if (cap_set_flag(mycaps, CAP_EFFECTIVE, 1, capvalue, CAP_SET) != (-1)) {
-                                // ...try to set it effective...
-                                if (cap_set_proc(mycaps) != (-1)) {
-                                    //done
-                                    clearcapability=true;
-                                    docontinue=true;
+                //check, if we have permissions
+                if (cap_get_flag(mycaps, capvalue[0], CAP_EFFECTIVE, &flagvalue) != (-1)) {
+                    if (flagvalue == CAP_SET) {
+                        // we have effective CAP_SYS_ADMIN
+                        docontinue=true;
+                    } else {
+                        //if we do not have effective capability, see if we are permitted in principle
+                        if (cap_get_flag(mycaps, capvalue[0],  CAP_PERMITTED, &flagvalue) != (-1)) {
+                            if (flagvalue == CAP_SET) {
+                                // yes, CAP_SYS_ADMIN+p...
+                                if (cap_set_flag(mycaps, CAP_EFFECTIVE, 1, capvalue, CAP_SET) != (-1)) {
+                                    // ...try to set it effective...
+                                    if (cap_set_proc(mycaps) != (-1)) {
+                                        //done
+                                        clearcapability=true;
+                                        docontinue=true;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            if (!clearcapability) {
-                cap_free(mycaps);
-                mycaps=NULL;
+                if (!clearcapability) {
+                    cap_free(mycaps);
+                    mycaps=NULL;
+                }
             }
         }
 #endif
-        if (!docontinue) docontinue=(geteuid() == 0);
+        if (newprivs) if (!docontinue) docontinue=(geteuid() == 0);
 
         // we need to lock "new privs" in order to avoid error 13 (EPERM)
         if (!docontinue) docontinue=(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)==0);
+        /* manual PRCTL(2) says unter "PR_SET_NO_NEW_PRIVS"
+         *
+            Set  the  calling  thread's no_new_privs attribute to the value in arg2.  With no_new_privs set to 1,
+            execve(2) promises not to grant privileges to do anything that could not have been done  without  the
+            execve(2) call (for example, rendering the set-user-ID and set-group-ID mode bits, and file capabili‐
+            ties non-functional).  Once set, the no_new_privs attribute cannot be unset.  The setting of this at‐
+            tribute is inherited by children created by fork(2) and clone(2), and preserved across execve(2).
+
+            Since  Linux  4.10,  the  value of a thread's no_new_privs attribute can be viewed via the NoNewPrivs
+            field in the /proc/[pid]/status file.
+
+            For more information, see the kernel  source  file  Documentation/userspace-api/no_new_privs.rst  (or
+            Documentation/prctl/no_new_privs.txt before Linux 4.13).  See also seccomp(2).
+         *
+         */
+
         if (docontinue) {
             struct sock_fprog *prog=bpfprog;
             if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, prog)==0) {
