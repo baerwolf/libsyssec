@@ -219,7 +219,7 @@ static size_t SYSCALL_LIST_merge(long *list) {
 }
 
 #define BPFMAXLENGTH (256)
-int bpf_add_opcode(void *bpfprog) {
+int syssec_bpf_add_opcode(void *bpfprog) {
     int result=-1;
     unsigned short i;
     struct sock_fprog *prog = bpfprog;
@@ -267,7 +267,7 @@ static int compilebpf(struct sock_fprog *prog, long *list, size_t lower, size_t 
         }
     }
 
-    i=bpf_add_opcode(prog);
+    i=syssec_bpf_add_opcode(prog);
     if (i<0) return EXIT_FAILURE;
 //     printf("DEBUG: [%llu - %llu] (i=%i, pivot=%llu)\n", (unsigned long long)lower, (unsigned long long)upper, (int)i, (unsigned long long)pivot);
     if (upper-lower<1) {
@@ -280,7 +280,7 @@ static int compilebpf(struct sock_fprog *prog, long *list, size_t lower, size_t 
             struct sock_filter hlpl = BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, list[lower]&SYSCALLMASK, 0x0, 0xff);
             struct sock_filter hlpu = BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, list[upper]&SYSCALLMASK, 0xff, 0xff);
             prog->filter[i]=hlpl;
-            j=bpf_add_opcode(prog);
+            j=syssec_bpf_add_opcode(prog);
             if (j<0) return EXIT_FAILURE;
             prog->filter[j]=hlpu;
         } else {
@@ -288,7 +288,7 @@ static int compilebpf(struct sock_fprog *prog, long *list, size_t lower, size_t 
             struct sock_filter hlpl = BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, list[lower]&SYSCALLMASK, 0xff, 0);
             struct sock_filter hlpu = BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, list[upper]&SYSCALLMASK, 0xff, 0xff);
             prog->filter[i]=hlpl;
-            j=bpf_add_opcode(prog);
+            j=syssec_bpf_add_opcode(prog);
             if (j<0) return EXIT_FAILURE;
             prog->filter[j]=hlpu;
         }
@@ -317,9 +317,9 @@ static int linkbpfEx(struct sock_fprog *prog, long *list, size_t len, int seccom
         unsigned short i,j=prog->len;
         int k;
 
-        k=bpf_add_opcode(prog);
+        k=syssec_bpf_add_opcode(prog);
         if (k<0) return EXIT_FAILURE;
-        k=bpf_add_opcode(prog);
+        k=syssec_bpf_add_opcode(prog);
         if (k<0) return EXIT_FAILURE;
 
     if (rejectlast) {
@@ -554,13 +554,13 @@ int syssec_combinebpf(/*struct sock_fprog*/void *appended_to, /*struct sock_fpro
                 result=EXIT_SUCCESS;
             } else {
                 unsigned short len;
-                if (to->len == 0) bpf_add_opcode(to);
+                if (to->len == 0) syssec_bpf_add_opcode(to);
                 len=from->len;
                 if (to->len > 0) {
                     unsigned short i=skip;
                     to->filter[to->len-1]=from->filter[i++];
                     for (;i<len;i++) {
-                        if (bpf_add_opcode(to) < 0) return EXIT_FAILURE;
+                        if (syssec_bpf_add_opcode(to) < 0) return EXIT_FAILURE;
                         to->filter[to->len-1]=from->filter[i];
                     }
                     result=EXIT_SUCCESS;
