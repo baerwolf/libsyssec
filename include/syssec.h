@@ -68,6 +68,8 @@ struct syscall_info {
 SYSSECPUBLIC int syssec_initialize(void);
 SYSSECPUBLIC int syssec_finalize(void);
 
+SYSSECPUBLIC const char *syssec_version(void);
+
 SYSSECPUBLIC int syssec_install(void *bpfprog);
 SYSSECPUBLIC int syssec_installEx(void *bpfprog, bool newprivs);
 

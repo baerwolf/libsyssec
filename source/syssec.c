@@ -22,6 +22,8 @@
 #   include <sys/capability.h>
 #endif
 
+#define myversion "20240216T12045ZSB"
+
 static int __syssec_initialized = false;
 static struct syscall_info plattformsyscalls[] = {
 #include "../build/plattform.syscalls"
@@ -68,6 +70,10 @@ int syssec_finalize(void) {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+}
+
+const char *syssec_version(void) {
+    return myversion;
 }
 
 #ifndef AUDIT_ARCH_UNKNOWN
