@@ -594,3 +594,7 @@ int syssec_SECCOMP_RET_TRAP(uint16_t returncode) {
 int syssec_SECCOMP_RET_KILL_PROCESS(void) {
     return SECCOMP_RET_KILL_PROCESS;
 }
+
+int syssec_SECCOMP_RET_ERRNO_EPERM(void) {
+    return syssec_SECCOMP_RET_ERRNO(EPERM);
+}
