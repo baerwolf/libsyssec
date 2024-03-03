@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
         test[i]=syssec_syscallnr("SYS_init_module");         if (test[i]!=SYSCALLEOL) {i++;}
         test[i]=syssec_syscallnr("SYS_reboot");              if (test[i]!=SYSCALLEOL) {i++;}
         test[i]=syssec_syscallnr("SYS_swapon");              if (test[i]!=SYSCALLEOL) {i++;}
-        test[i]=syssec_syscallnr("capset");                  if (test[i]!=SYSCALLEOL) {i++;}
+        test[i]=syssec_syscallnr("SYS_capset");              if (test[i]!=SYSCALLEOL) {i++;}
 
         test[i]=syssec_syscallnr("SYS_setgid");              if (test[i]!=SYSCALLEOL) {i++;}
         test[i]=syssec_syscallnr("SYS_setuid");              if (test[i]!=SYSCALLEOL) {i++;}
